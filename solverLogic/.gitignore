@@ -1,0 +1,10 @@
+target/
+project/target/
+project/project/
+
+.vscode/
+.bloop/
+.metals/
+
+.DS_Store
+Thumbs.db
