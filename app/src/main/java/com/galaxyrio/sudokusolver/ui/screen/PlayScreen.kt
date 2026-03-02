@@ -1,6 +1,15 @@
 package com.galaxyrio.sudokusolver.ui.screen
 
-import androidx.compose.foundation.clickable
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +21,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material3.CardDefaults
@@ -20,6 +32,7 @@ import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
@@ -58,18 +71,28 @@ data class SavedGame(
     val completionPercentage: Int
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun PlayMenuScreen(
     modifier: Modifier = Modifier,
     initialDifficulty: Difficulty = Difficulty.MEDIUM,
     onStartGame: (Difficulty) -> Unit,
     onContinueGame: (String) -> Unit,
+    onDeleteGames: (List<SavedGame>) -> Unit = {}, // callback for deletion
     viewModel: PlayViewModel = viewModel()
 ) {
     var difficulty by rememberSaveable(initialDifficulty) { mutableStateOf(initialDifficulty) }
     // Real state for existing game
     val savedGames by viewModel.savedGames.collectAsState()
+
+    // Multi-selection state
+    var selectedGameIds by rememberSaveable { mutableStateOf(emptySet<String>()) }
+    val isSelectionMode = selectedGameIds.isNotEmpty()
+
+    // Handle back press to exit selection mode
+    BackHandler(enabled = isSelectionMode) {
+        selectedGameIds = emptySet()
+    }
 
     val filteredSavedGames by remember(savedGames, difficulty) {
         derivedStateOf { savedGames.filter { it.difficulty == difficulty } }
@@ -94,7 +117,7 @@ fun PlayMenuScreen(
             LargeTopAppBar(
                 title = {
                     Text(
-                        "Sudoku",
+                        if (isSelectionMode) "${selectedGameIds.size} Selected" else "Sudoku",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -103,15 +126,45 @@ fun PlayMenuScreen(
                 colors = TopAppBarDefaults.largeTopAppBarColors(
                     containerColor = expandedColor,
                     scrolledContainerColor = collapsedColor
-                )
+                ),
+                navigationIcon = {
+                     if (isSelectionMode) {
+                         androidx.compose.material3.IconButton(onClick = { selectedGameIds = emptySet() }) {
+                             Icon(Icons.Default.Close, contentDescription = "Close Selection")
+                         }
+                     }
+                }
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { onStartGame(difficulty) },
-                icon = { Icon(Icons.Filled.Add, "Start New Game") },
-                text = { Text(text = "New Game") },
-            )
+            AnimatedContent(
+                targetState = isSelectionMode,
+                transitionSpec = {
+                    (scaleIn() + fadeIn()).togetherWith(scaleOut() + fadeOut())
+                },
+                label = "fab_transition"
+            ) { selectionMode ->
+                if (selectionMode) {
+                    ExtendedFloatingActionButton(
+                        onClick = {
+                            val selectedGames = savedGames.filter { it.id in selectedGameIds }
+                            viewModel.deleteGames(selectedGames)
+                            onDeleteGames(selectedGames)
+                            selectedGameIds = emptySet()
+                        },
+                        icon = { Icon(Icons.Default.Delete, "Delete Selected") },
+                        text = { Text(text = "Delete") },
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                } else {
+                    ExtendedFloatingActionButton(
+                        onClick = { onStartGame(difficulty) },
+                        icon = { Icon(Icons.Filled.Add, "Start New Game") },
+                        text = { Text(text = "New Game") },
+                    )
+                }
+            }
         }
     ) { innerPadding ->
         Column(
@@ -173,11 +226,43 @@ fun PlayMenuScreen(
                 } else {
                     items(filteredSavedGames.size) { index ->
                         val game = filteredSavedGames[index]
+                        val isSelected = game.id in selectedGameIds
+
                         OutlinedCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp)
-                                .clickable { onContinueGame(game.id) },
+                                .combinedClickable(
+                                    onClick = {
+                                        if (isSelectionMode) {
+                                            selectedGameIds = if (isSelected) {
+                                                selectedGameIds - game.id
+                                            } else {
+                                                selectedGameIds + game.id
+                                            }
+                                        } else {
+                                            onContinueGame(game.id)
+                                        }
+                                    },
+                                    onLongClick = {
+                                        if (!isSelectionMode) {
+                                            selectedGameIds = selectedGameIds + game.id
+                                        }
+                                    }
+                                ),
+                            colors = if (isSelected) {
+                                CardDefaults.outlinedCardColors(
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            } else {
+                                CardDefaults.outlinedCardColors()
+                            },
+                             border = if (isSelected) {
+                                BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                            } else {
+                                CardDefaults.outlinedCardBorder()
+                            }
                         ) {
                             ListItem(
                                 headlineContent = { Text("Game ${game.date}") },
@@ -185,18 +270,31 @@ fun PlayMenuScreen(
                                     Text("${game.difficulty} • ${game.completionPercentage}% Complete")
                                 },
                                 leadingContent = {
-                                    Icon(
-                                        imageVector = Icons.Outlined.DateRange,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
+                                    if (isSelected) {
+                                         Icon(
+                                            imageVector = Icons.Filled.CheckCircle,
+                                            contentDescription = "Selected",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Outlined.DateRange,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
                                 },
                                 trailingContent = {
-                                    Icon(
-                                        imageVector = Icons.Default.PlayArrow,
-                                        contentDescription = "Resume"
-                                    )
-                                }
+                                    if (!isSelectionMode) {
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = "Resume"
+                                        )
+                                    }
+                                },
+                                colors = ListItemDefaults.colors(
+                                    containerColor = androidx.compose.ui.graphics.Color.Transparent
+                                )
                             )
                         }
                     }

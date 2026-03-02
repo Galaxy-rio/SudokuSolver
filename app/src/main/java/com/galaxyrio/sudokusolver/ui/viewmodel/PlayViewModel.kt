@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -43,5 +44,13 @@ class PlayViewModel(application: Application) : AndroidViewModel(application) {
         val cells = entity.sudoku.cells
         val solvedCount = cells.count { it.value != 0 }
         return (solvedCount * 100) / 81
+    }
+
+    fun deleteGames(games: List<SavedGame>) {
+        viewModelScope.launch {
+            games.forEach { game ->
+                sudokuDao.deleteGame(game.id.toLong())
+            }
+        }
     }
 }
