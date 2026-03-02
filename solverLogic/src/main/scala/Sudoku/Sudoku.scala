@@ -214,7 +214,8 @@ case class Sudoku(board: Vector[Vector[Cell]]) extends BasicSudokuView:
 		inCellValid && crossCellValid
 
 	def isCandidate(row: SudokuIndex, col: SudokuIndex, value: SudokuInt): Boolean =
-		this.board(row)(col).notes().contains(value)
+		val cell = this.board(row)(col)
+		cell.number().isEmpty && cell.notes().contains(value)
 
 object Sudoku:
 	export BasicSudokuView.{deserialize => _, *}
@@ -523,9 +524,9 @@ object HumanFriendlySolver extends SudokuSolver:
 				unit <- Sudoku.iterUnits()
 				digits2CellsInUnit = (1 to 9).iterator.map { case n =>
 					n -> unit.filter { case (r, c) => sudoku.isCandidate(r, c, n) }.toSet
-				}.toMap
+				}.filter { case (_, cells) => cells.nonEmpty }.toMap
 				if digits2CellsInUnit.size >= k
-				ds <- (1 to 9).combinations(k)
+				ds <- digits2CellsInUnit.keysIterator.toVector.combinations(k)
 				cells = ds.iterator.flatMap(digits2CellsInUnit).toSet
 				if cells.size == k
 				toRemove = cells.iterator.flatMap { case (r, c) =>
@@ -594,10 +595,8 @@ object HumanFriendlySolver extends SudokuSolver:
 					if rows.size == 1 then
 						val r = rows.head
 						(0 until 9).iterator
-							.filter(c => c < boxCol * 3 || c >= boxCol * 3 + 3) // 宫外
-							.filter { c =>
-								sudoku.board(r)(c).number().isEmpty && sudoku.isCandidate(r, c, n)
-							}
+							.filter(c => c < boxCol * 3 || c >= boxCol * 3 + 3)
+							.filter { sudoku.isCandidate(r, _, n) }
 							.map(c => (r, c, n))
 					else Iterator.empty
 
@@ -605,10 +604,8 @@ object HumanFriendlySolver extends SudokuSolver:
 					if cols.size == 1 then
 						val c = cols.head
 						(0 until 9).iterator
-							.filter(r => r < boxRow * 3 || r >= boxRow * 3 + 3) // 宫外
-							.filter { r =>
-								sudoku.board(r)(c).number().isEmpty && sudoku.isCandidate(r, c, n)
-							}
+							.filter(r => r < boxRow * 3 || r >= boxRow * 3 + 3)
+							.filter { sudoku.isCandidate(_, c, n) }
 							.map(r => (r, c, n))
 					else Iterator.empty
 
@@ -618,8 +615,10 @@ object HumanFriendlySolver extends SudokuSolver:
 				toRemove.foldLeft(sudoku) { case (su, (r, c, d)) => su.deleteNote(r, c, d) }
 			).nextOption
 		result match
-			case Some(res) => if res.isConsistent() then InternalState.Progressed(res) else InternalState.InValid
-			case None      => InternalState.Unchanged(sudoku)
+			case Some(res)
+				=> if res.isConsistent() then InternalState.Progressed(res) else InternalState.InValid
+			case None
+				=> InternalState.Unchanged(sudoku)
 
 final class SudokuGenerator(var seed: Option[Long] = None):
 	enum Difficulty:
