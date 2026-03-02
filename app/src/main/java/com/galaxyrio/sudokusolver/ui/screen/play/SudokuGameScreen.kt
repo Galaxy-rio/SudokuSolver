@@ -2,20 +2,20 @@ package com.galaxyrio.sudokusolver.ui.screen.play
 
 import android.annotation.SuppressLint
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SheetValue
@@ -34,8 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.galaxyrio.sudokusolver.game.Sudoku
 import com.galaxyrio.sudokusolver.game.generator.SudokuGenerator
-import com.galaxyrio.sudokusolver.ui.components.GameToolbar
-import com.galaxyrio.sudokusolver.ui.components.GameTopBar
 import com.galaxyrio.sudokusolver.ui.components.NumberPad
 import com.galaxyrio.sudokusolver.ui.components.SudokuBoard
 import com.galaxyrio.sudokusolver.ui.screen.Difficulty
@@ -51,6 +49,28 @@ import com.galaxyrio.sudokusolver.database.AppDatabase
 import com.galaxyrio.sudokusolver.database.SudokuEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.material3.FilledIconToggleButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.ripple
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("UnusedBoxWithConstraintsScope")
@@ -223,23 +243,44 @@ fun SudokuGameScreen(
                 .padding(paddingValues),
             contentAlignment = Alignment.TopCenter
         ) {
-            val screenHeight = maxHeight
             val screenWidth = maxWidth
 
-            val topBarHeight = screenHeight / 8
             val boardHeight = screenWidth-32.dp
 
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
                 // 1. Top Bar Area
-                GameTopBar(
-                    title = "Sudoku - ${difficulty.name}",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(topBarHeight)
-                        .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
-                )
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    TopAppBar(
+                        title = { Text("Sudoku") },
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Back"
+                                )
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            titleContentColor = MaterialTheme.colorScheme.onSurface,
+                        )
+                    )
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Text(
+                            text = difficulty.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 20.dp, bottom = 8.dp)
+                        )
+                    }
+                }
 
                 // 2. Board Area
                 Box(
@@ -296,7 +337,7 @@ fun SudokuGameScreen(
                             selectedRow = null
                             selectedCol = null
                         },
-                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+                    verticalArrangement = Arrangement.SpaceBetween,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     // 3. Middle Area: Number Pad
@@ -338,45 +379,127 @@ fun SudokuGameScreen(
                     }
 
                     // 4. Tool Bar Area
-                    Column(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        GameToolbar(
-                            isNoteMode = isNoteMode,
-                            onUndoClick = { undo() },
-                            onDeleteClick = {
-                                if (selectedRow != null && selectedCol != null) {
-                                    val row = selectedRow!!
-                                    val col = selectedCol!!
-                                    val currentCell = sudoku.getCell(row, col)
-
-                                    if (!currentCell.isFixed) {
-                                        if (currentCell.value != 0 || currentCell.candidates.isNotEmpty()) {
-                                            updateSudoku(sudoku.setCell(row, col, 0))
-                                        }
-                                    }
+                    BottomAppBar(
+                        actions = {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                    ToolbarActionButton(
+                                        onClick = { undo() },
+                                        icon = Icons.AutoMirrored.Filled.Undo,
+                                        contentDescription = "Undo"
+                                    )
                                 }
-                            },
-                            onNoteModeClick = { isNoteMode = !isNoteMode },
-                            onAutoCandidatesClick = {
-                                updateSudoku(
-                                    com.galaxyrio.sudokusolver.game.generator.CandidateCalculator.calculateAllCandidates(sudoku)
-                                )
-                            },
-                            onHintClick = {
-                                scope.launch {
-                                    scaffoldState.bottomSheetState.expand()
+                                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                    ToolbarActionButton(
+                                        onClick = {
+                                            if (selectedRow != null && selectedCol != null) {
+                                                val row = selectedRow!!
+                                                val col = selectedCol!!
+                                                val currentCell = sudoku.getCell(row, col)
+
+                                                if (!currentCell.isFixed) {
+                                                    if (currentCell.value != 0 || currentCell.candidates.isNotEmpty()) {
+                                                        updateSudoku(sudoku.setCell(row, col, 0))
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        icon = Icons.AutoMirrored.Filled.Backspace,
+                                        contentDescription = "Delete"
+                                    )
+                                }
+                                // Edit Button
+                                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                    ToolbarActionButton(
+                                        onClick = { isNoteMode = !isNoteMode },
+                                        icon = Icons.Default.Edit,
+                                        contentDescription = "Note Mode",
+                                        isSelected = isNoteMode
+                                    )
+                                }
+                                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                    ToolbarActionButton(
+                                        onClick = {
+                                            updateSudoku(
+                                                com.galaxyrio.sudokusolver.game.generator.CandidateCalculator.calculateAllCandidates(
+                                                    sudoku
+                                                )
+                                            )
+                                        },
+                                        icon = Icons.Default.AutoAwesome,
+                                        contentDescription = "Auto Candidates"
+                                    )
+                                }
+                                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                    ToolbarActionButton(
+                                        onClick = {
+                                            scope.launch {
+                                                scaffoldState.bottomSheetState.expand()
+                                            }
+                                        },
+                                        icon = Icons.Default.Lightbulb,
+                                        contentDescription = "Hint"
+                                    )
                                 }
                             }
-                        )
-
-                        // Bottom spacing + Gesture inset
-                        val bottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                        Spacer(modifier = Modifier.height(24.dp + bottomPadding))
-                    }
+                        }
+                    )
                 }
             }
 
+        }
+    }
+}
+
+@Composable
+private fun ToolbarActionButton(
+    onClick: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    isSelected: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.8f else 1.0f,
+        label = "scale"
+    )
+
+    val containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+    val contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(bounded = false, radius = 60.dp),
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .size(48.dp)
+                .background(containerColor, androidx.compose.foundation.shape.CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = contentColor,
+                modifier = Modifier.size(24.dp)
+            )
         }
     }
 }
