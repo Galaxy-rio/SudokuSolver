@@ -40,6 +40,10 @@ import com.galaxyrio.sudokusolver.ui.components.NumberPad
 import com.galaxyrio.sudokusolver.ui.components.SudokuBoard
 import com.galaxyrio.sudokusolver.ui.screen.Difficulty
 import kotlinx.coroutines.launch
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import com.galaxyrio.sudokusolver.game.validator.SudokuValidator
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("UnusedBoxWithConstraintsScope")
@@ -65,6 +69,7 @@ fun SudokuGameScreen(
     var selectedCol by remember { mutableStateOf<Int?>(null) }
     var selectedNumber by remember { mutableStateOf<Int?>(null) }
     var isNoteMode by remember { mutableStateOf(false) }
+    var showWinDialog by remember { mutableStateOf(false) }
 
     // History for Undo
     val history = remember { mutableListOf<Sudoku>() }
@@ -81,6 +86,12 @@ fun SudokuGameScreen(
     fun updateSudoku(newSudoku: Sudoku) {
         history.add(sudoku)
         sudoku = newSudoku
+
+        // Check win condition
+        val isFull = newSudoku.cells.none { it.value == 0 }
+        if (isFull && SudokuValidator.isBoardValid(newSudoku)) {
+             showWinDialog = true
+        }
     }
 
     fun undo() {
@@ -117,6 +128,24 @@ fun SudokuGameScreen(
         // Actually BottomSheetScaffold in M3 doesn't have a scrim by default for standard sheets, it just overlays.
         modifier = modifier.fillMaxSize()
     ) { paddingValues ->
+        if (showWinDialog) {
+            AlertDialog(
+                onDismissRequest = { showWinDialog = false },
+                title = { Text(text = "Well Done!") },
+                text = { Text(text = "You have successfully solved the Sudoku puzzle.") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showWinDialog = false
+                            onBack()
+                        }
+                    ) {
+                        Text("Awesome")
+                    }
+                }
+            )
+        }
+
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
