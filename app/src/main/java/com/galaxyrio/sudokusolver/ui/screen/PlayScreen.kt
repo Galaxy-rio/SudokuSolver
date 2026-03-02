@@ -1,10 +1,5 @@
 package com.galaxyrio.sudokusolver.ui.screen
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,20 +9,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.DateRange
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
@@ -36,6 +27,8 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -44,11 +37,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.galaxyrio.sudokusolver.ui.viewmodel.PlayViewModel
 
@@ -77,176 +68,131 @@ fun PlayMenuScreen(
     // Real state for existing game
     val savedGames by viewModel.savedGames.collectAsState()
 
-    var isSavedGamesExpanded by rememberSaveable { mutableStateOf(true) }
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
     Scaffold(
-        modifier = modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.surface
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState()), // Add scroll for smaller screens
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(32.dp)
-            ) {
-                Spacer(modifier = Modifier.height(32.dp))
-
-                // Hero Section
-                Text(
-                    text = "Sudoku",
-                    style = MaterialTheme.typography.displayLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-1).sp
-                    ),
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                Text(
-                    text = "Challenge your mind daily",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 48.dp)
-                )
-
-                // Difficulty Options
-
-
-                SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 0.dp)
-                ) {
-                    Difficulty.entries.forEachIndexed { index, level ->
-                        SegmentedButton(
-                            selected = difficulty == level,
-                            onClick = { difficulty = level },
-                            shape = SegmentedButtonDefaults.itemShape(
-                                index = index,
-                                count = Difficulty.entries.size
-                            ),
-                            label = {
-                                Text(
-                                    text = level.name,
-                                    style = MaterialTheme.typography.labelLarge
-                                )
-                            },
-                        )
-                    }
-                }
-
-                // Main Action Button
-                Button(
-                    onClick = { onStartGame(difficulty) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .padding(top= 4.dp,bottom = 4.dp),
-                    shape = MaterialTheme.shapes.extraLarge,
-                    elevation = ButtonDefaults.buttonElevation(
-                        defaultElevation = 4.dp,
-                        pressedElevation = 2.dp
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(24.dp)
-                            .padding(end = 8.dp)
-                    )
+        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            LargeTopAppBar(
+                title = {
                     Text(
-                        text = "Start New Game",
-                        style = MaterialTheme.typography.titleMedium
+                        "Sudoku",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                }
+                },
+                scrollBehavior = scrollBehavior
+            )
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = { onStartGame(difficulty) },
+                icon = { Icon(Icons.Filled.Add, "Start New Game") },
+                text = { Text(text = "New Game") },
+            )
+        }
+    ) { innerPadding ->
+        LazyColumn(
+            contentPadding = innerPadding,
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Text(
+                        text = "Recent Games",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
 
-                // Saved Games Section
-                if (savedGames.isNotEmpty()) {
-                    OutlinedCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 16.dp),
-                        colors = CardDefaults.outlinedCardColors(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                        ),
-                        border = CardDefaults.outlinedCardBorder().copy(width = 1.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            ListItem(
-                                headlineContent = {
-                                    Text(
-                                        "Saved Games",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                },
-                                trailingContent = {
-                                    Icon(
-                                        imageVector = if (isSavedGamesExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                        contentDescription = if (isSavedGamesExpanded) "Collapse" else "Expand"
-                                    )
-                                },
-                                modifier = Modifier
-                                    .clickable { isSavedGamesExpanded = !isSavedGamesExpanded }
-                                    .clip(MaterialTheme.shapes.medium),
-                                colors = requestListItemColors(MaterialTheme.colorScheme.surface)
+                    if (savedGames.isEmpty()) {
+                         OutlinedCard(
+                            modifier = Modifier.fillMaxWidth(),
+                             colors = CardDefaults.outlinedCardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
                             )
-
-                            AnimatedVisibility(
-                                visible = isSavedGamesExpanded,
-                                enter = expandVertically() + fadeIn(),
-                                exit = shrinkVertically() + fadeOut()
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Column(
-                                    modifier = Modifier.padding(bottom = 8.dp)
-                                ) {
-                                    savedGames.forEach { game ->
-                                        ListItem(
-                                            headlineContent = { Text("Game ${game.date}") },
-                                            supportingContent = {
-                                                Text(
-                                                    "${game.difficulty} • ${game.completionPercentage}% Complete",
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            },
-                                            leadingContent = {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.DateRange,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            },
-                                            modifier = Modifier
-                                                .clickable { onContinueGame(game.id) }
-                                                .padding(horizontal = 4.dp),
-                                            colors = requestListItemColors(MaterialTheme.colorScheme.surface)
+                                Text(
+                                    text = "No saved games found",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    } else {
+                        // Display only the last 3 saved games or similar logic if needed,
+                        // but here we just show them in a column inside the card or separate cards.
+                        // User asked for "Saved games, using card suite".
+                        // Let's list each game as a card.
+                        savedGames.forEach { game ->
+                            OutlinedCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clickable { onContinueGame(game.id) },
+                            ) {
+                                ListItem(
+                                    headlineContent = { Text("Game ${game.date}") },
+                                    supportingContent = {
+                                        Text("${game.difficulty} • ${game.completionPercentage}% Complete")
+                                    },
+                                    leadingContent = {
+                                        Icon(
+                                            imageVector = Icons.Outlined.DateRange,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    },
+                                    trailingContent = {
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = "Resume"
                                         )
                                     }
-                                }
+                                )
                             }
                         }
                     }
                 }
+            }
 
-                Spacer(modifier = Modifier.height(32.dp))
+            item {
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Text(
+                        text = "Difficulty",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+                    )
+
+                    SingleChoiceSegmentedButtonRow(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Difficulty.entries.forEachIndexed { index, level ->
+                            SegmentedButton(
+                                selected = difficulty == level,
+                                onClick = { difficulty = level },
+                                shape = SegmentedButtonDefaults.itemShape(
+                                    index = index,
+                                    count = Difficulty.entries.size
+                                ),
+                                label = {
+                                    Text(
+                                        text = level.name,
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                },
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(80.dp)) // Spacing for FAB
+                }
             }
         }
     }
 }
-
-@Composable
-private fun requestListItemColors(containerColor: androidx.compose.ui.graphics.Color) = androidx.compose.material3.ListItemDefaults.colors(
-    containerColor = containerColor
-)
