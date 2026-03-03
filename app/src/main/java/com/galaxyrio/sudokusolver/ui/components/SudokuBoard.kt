@@ -80,7 +80,7 @@ fun SudokuBoard(
                                         val isError = !cell.isFixed && cell.value != 0 && SudokuValidator.checkContradiction(sudoku, row, col)
                                         val isSelected = (row == selectedRow && col == selectedCol)
                                         val isSelectedCross = (selectedRow != null && selectedCol != null) && (row == selectedRow || col == selectedCol)
-                                        val isSelectedCell = (selectedRow != null && selectedCol != null) && ((row / 3 == selectedRow?.div(3) && col / 3 == selectedCol?.div(
+                                        val isSelectedCell = (selectedRow != null && selectedCol != null) && ((row / 3 == selectedRow.div(3) && col / 3 == selectedCol.div(
                                             3
                                         )))
 
