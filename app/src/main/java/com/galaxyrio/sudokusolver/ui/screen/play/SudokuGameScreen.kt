@@ -321,7 +321,9 @@ fun SudokuGameScreen(
                         },
                         selectedRow = selectedRow,
                         selectedCol = selectedCol,
-                        highlightNumber = selectedNumber,
+                        highlightNumber = selectedNumber ?: if (selectedRow != null && selectedCol != null) {
+                            sudoku.getCell(selectedRow!!, selectedCol!!).value.takeIf { it != 0 }
+                        } else null,
                         modifier = Modifier.fillMaxSize()
                     )
                 }

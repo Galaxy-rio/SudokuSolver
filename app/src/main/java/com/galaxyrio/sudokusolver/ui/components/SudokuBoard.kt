@@ -137,8 +137,10 @@ fun SudokuCell(
     isSelectedCell: Boolean = false,
 ) {
     val backgroundColor = when {
+        isError && isSelected -> MaterialTheme.colorScheme.error
         isError -> MaterialTheme.colorScheme.errorContainer
-        isSelected && !isError -> MaterialTheme.colorScheme.primaryContainer
+        isSelected && isFixed -> MaterialTheme.colorScheme.primary
+        isSelected -> MaterialTheme.colorScheme.primaryContainer
         isSelectedCross && !isError -> MaterialTheme.colorScheme.surfaceContainerHighest
         isSelectedCell && !isError -> MaterialTheme.colorScheme.surfaceContainer
         isValueHighlighted && !isError -> MaterialTheme.colorScheme.secondaryContainer
@@ -153,10 +155,12 @@ fun SudokuCell(
     ) {
         if (value != null && value != 0) {
             val textColor = when {
-                isFixed -> MaterialTheme.colorScheme.onSurface
+                isError && isSelected -> MaterialTheme.colorScheme.onError
                 isError -> MaterialTheme.colorScheme.onErrorContainer
-                isSelected && !isError -> MaterialTheme.colorScheme.onPrimaryContainer
-                isValueHighlighted && !isError -> MaterialTheme.colorScheme.onSecondaryContainer
+                isSelected && isFixed -> MaterialTheme.colorScheme.onPrimary
+                isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
+                isFixed -> MaterialTheme.colorScheme.onSurface
+                isValueHighlighted -> MaterialTheme.colorScheme.onSecondaryContainer
                 else -> MaterialTheme.colorScheme.primary
             }
 
@@ -189,8 +193,12 @@ fun SudokuCell(
                                     .aspectRatio(1f)
                                     .then(
                                         if (isCandidateHighlighted) {
+                                            val candidateBackground = when{
+                                                errorCandidates.contains(candidateNum) -> MaterialTheme.colorScheme.errorContainer
+                                                else -> MaterialTheme.colorScheme.secondaryContainer
+                                            }
                                             Modifier.background(
-                                                MaterialTheme.colorScheme.secondaryContainer,
+                                                candidateBackground,
                                                 androidx.compose.foundation.shape.CircleShape
                                             )
                                         } else {
