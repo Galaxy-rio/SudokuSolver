@@ -1,5 +1,6 @@
 package com.galaxyrio.sudokusolver.ui.screen
 
+import android.annotation.SuppressLint
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -7,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -53,8 +56,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.galaxyrio.sudokusolver.ui.viewmodel.PlayViewModel
@@ -68,7 +79,10 @@ data class SavedGame(
     val id: String,
     val date: String,
     val difficulty: Difficulty,
-    val completionPercentage: Int
+    val completionPercentage: Int,
+    val emptyRemains: Int,
+    val timeSpentSeconds: Long,
+    val board: List<Int>
 )
 
 @OptIn(
@@ -254,32 +268,51 @@ fun PlayMenuScreen(
                                     count = filteredSavedGames.size
                                 )
                             },
-                        content = { Text("Game ${game.date}") },
+                        content = { Text(game.date) },
                         supportingContent = {
-                            Text("${game.difficulty} • ${game.completionPercentage}% Complete")
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(0.dp)
+                            ) {
+
+                                Text(formatSecondsToTime(game.timeSpentSeconds))
+                                Text("${game.emptyRemains} numbers left")
+                            }
+
                         },
                         leadingContent = {
-                            if (isSelected) {
-                                Icon(
-                                    imageVector = Icons.Filled.CheckCircle,
-                                    contentDescription = "Selected",
-                                    tint = MaterialTheme.colorScheme.primary
+                            val cornerRadius = if (isSelected) 12.dp else 4.dp
+                                SudokuThumbnail(
+                                    board = game.board,
+                                    cornerRadius = cornerRadius,
+                                    modifier = Modifier.size(64.dp)
                                 )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Outlined.DateRange,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
+
                         },
                         trailingContent = {
-                            if (!isSelectionMode) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = "Resume"
-                                )
+                            Box(
+                                modifier = Modifier
+                                    .height(64.dp),
+                                contentAlignment = Alignment.Center
+                            ){
+                                if (!isSelectionMode) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Resume"
+                                    )
+                                }
+                                if (isSelected) {
+
+                                    Icon(
+                                        imageVector = Icons.Filled.CheckCircle,
+                                        contentDescription = "Selected",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+
+
+                                }
                             }
+
+
                         },
                         colors =
                             if (isSelected) {
@@ -299,4 +332,72 @@ fun PlayMenuScreen(
         }
         }
     }
+}
+
+@Composable
+fun SudokuThumbnail(
+    board: List<Int>,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.primary,
+    cornerRadius: Dp = 4.dp,
+    strokeWidth: Dp = 1.5.dp
+) {
+    Canvas(modifier = modifier.clip(RoundedCornerShape(cornerRadius))) {
+        val boardSize = size.minDimension
+        val cellSize = boardSize / 9
+        val strokeWidthPx = strokeWidth.toPx()
+        val halfStroke = strokeWidthPx / 2
+
+        // Draw background for filled cells
+        board.forEachIndexed { index, value ->
+            if (value != 0) {
+                val row = index / 9
+                val col = index % 9
+                drawRect(
+                    color = color.copy(alpha = 0.5f),
+                    topLeft = Offset(col * cellSize, row * cellSize),
+                    size = Size(cellSize, cellSize)
+                )
+            }
+        }
+
+        // Draw major grid lines (3x3 blocks)
+        for (i in 1..2) {
+            val linePos = i * 3 * cellSize
+            // Horizontal
+            drawLine(
+                color = color,
+                start = Offset(0f, linePos),
+                end = Offset(boardSize, linePos),
+                strokeWidth = strokeWidthPx
+            )
+            // Vertical
+            drawLine(
+                color = color,
+                start = Offset(linePos, 0f),
+                end = Offset(linePos, boardSize),
+                strokeWidth = strokeWidthPx
+            )
+        }
+
+        // Border
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(halfStroke, halfStroke),
+            size = Size(boardSize - strokeWidthPx, boardSize - strokeWidthPx),
+            cornerRadius = CornerRadius(cornerRadius.toPx() - halfStroke),
+            style = Stroke(width = strokeWidthPx)
+        )
+    }
+}
+
+@SuppressLint("DefaultLocale")
+fun formatSecondsToTime(totalSeconds: Long): String {
+    val duration = java.time.Duration.ofSeconds(totalSeconds)
+    val hours = duration.toHours()
+    val minutes = duration.toMinutesPart()
+    val seconds = duration.toSecondsPart()
+
+    return String.format("%02d:%02d:%02d", hours, minutes, seconds)
+
 }

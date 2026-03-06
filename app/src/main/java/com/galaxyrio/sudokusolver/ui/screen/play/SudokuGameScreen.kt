@@ -48,6 +48,7 @@ import com.galaxyrio.sudokusolver.database.AppDatabase
 import com.galaxyrio.sudokusolver.database.SudokuEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
@@ -66,6 +67,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.ripple
 import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.ui.text.style.TextAlign
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("UnusedBoxWithConstraintsScope")
@@ -80,6 +88,9 @@ fun SudokuGameScreen(
     val dao = remember { AppDatabase.getDatabase(context).sudokuDao() }
     val scope = rememberCoroutineScope()
     var currentGameId by remember { mutableStateOf(gameId) }
+
+    var timeSpentSeconds by remember { mutableLongStateOf(0L) }
+    var isTimerRunning by remember { mutableStateOf(true) }
 
     // Hint state
     val scaffoldState = rememberBottomSheetScaffoldState(
@@ -106,6 +117,7 @@ fun SudokuGameScreen(
                 val savedGame = dao.getGame(gameId)
                 if (savedGame != null) {
                     loadedGame = savedGame.sudoku
+                    timeSpentSeconds = savedGame.timeSpent
                 }
             }
 
@@ -120,11 +132,13 @@ fun SudokuGameScreen(
                 }
                 val newGame = SudokuGenerator().generate(clues)
                 sudokuState = newGame
+                timeSpentSeconds = 0
                 // Save immediately to get an ID
                 val newId = dao.saveGame(
                     SudokuEntity(
                         difficulty = difficulty,
-                        sudoku = newGame
+                        sudoku = newGame,
+                        timeSpent = 0
                     )
                 )
                 currentGameId = newId
@@ -147,6 +161,63 @@ fun SudokuGameScreen(
     var isNoteMode by remember { mutableStateOf(false) }
     var showWinDialog by remember { mutableStateOf(false) }
 
+    // Timer Logic
+    LaunchedEffect(isTimerRunning, showWinDialog) {
+        if (isTimerRunning && !showWinDialog) {
+            val startTime = System.currentTimeMillis()
+            val startSeconds = timeSpentSeconds
+            while (true) {
+                delay(1000L)
+                val elapsed = (System.currentTimeMillis() - startTime) / 1000
+                timeSpentSeconds = startSeconds + elapsed
+            }
+        }
+    }
+
+    // Lifecycle observer to pause timer when app is backgrounded
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE) {
+                isTimerRunning = false
+                // Save on pause
+                scope.launch(Dispatchers.IO) {
+                    currentGameId?.let { id ->
+                        val currentSudoku = sudokuState ?: return@launch
+                        dao.saveGame(
+                            SudokuEntity(
+                                id = id,
+                                difficulty = difficulty,
+                                sudoku = currentSudoku,
+                                timeSpent = timeSpentSeconds
+                            )
+                        )
+                    }
+                }
+            } else if (event == Lifecycle.Event.ON_RESUME) {
+                isTimerRunning = true
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            // Save on exit
+            scope.launch(Dispatchers.IO + NonCancellable) {
+                currentGameId?.let { id ->
+                    val currentSudoku = sudokuState ?: return@launch
+                    dao.saveGame(
+                        SudokuEntity(
+                            id = id,
+                            difficulty = difficulty,
+                            sudoku = currentSudoku,
+                            timeSpent = timeSpentSeconds
+                        )
+                    )
+                }
+            }
+        }
+    }
+
     // History for Undo
     val history = remember { mutableListOf<Sudoku>() }
 
@@ -157,6 +228,8 @@ fun SudokuGameScreen(
     fun updateSudoku(newSudoku: Sudoku) {
         history.add(sudoku)
         sudoku = newSudoku
+        // Update local state copy if needed for saving
+        sudokuState = newSudoku
 
         // Save to DB asynchronously
         scope.launch(Dispatchers.IO) {
@@ -165,7 +238,8 @@ fun SudokuGameScreen(
                     SudokuEntity(
                         id = id,
                         difficulty = difficulty,
-                        sudoku = newSudoku
+                        sudoku = newSudoku,
+                        timeSpent = timeSpentSeconds
                     )
                 )
             }
@@ -174,13 +248,13 @@ fun SudokuGameScreen(
         // Check win condition
         val isFull = newSudoku.cells.none { it.value == 0 }
         if (isFull && SudokuValidator.isBoardValid(newSudoku)) {
-             showWinDialog = true
-             // Clear saved game on win
-             scope.launch(Dispatchers.IO) {
-                 currentGameId?.let { id ->
-                     dao.deleteGame(id)
-                 }
-             }
+            showWinDialog = true
+            // Clear saved game on win
+            scope.launch(Dispatchers.IO) {
+                currentGameId?.let { id ->
+                    dao.deleteGame(id)
+                }
+            }
         }
     }
 
@@ -238,7 +312,7 @@ fun SudokuGameScreen(
         ) {
             val screenWidth = maxWidth
 
-            val boardHeight = screenWidth-32.dp
+            val boardHeight = screenWidth - 32.dp
 
             Column(
                 modifier = Modifier.fillMaxSize()
@@ -248,7 +322,9 @@ fun SudokuGameScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     TopAppBar(
-                        title = { Text("Sudoku") },
+                        title = {
+                            Text("Sudoku")
+                        },
                         navigationIcon = {
                             IconButton(onClick = onBack) {
                                 Icon(
@@ -262,17 +338,31 @@ fun SudokuGameScreen(
                             titleContentColor = MaterialTheme.colorScheme.onSurface,
                         )
                     )
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.CenterStart
+
+                    Row(
+                        modifier = Modifier
+                            .padding(bottom = 8.dp)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = difficulty.name,
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 20.dp, bottom = 8.dp)
+                            textAlign = TextAlign.Start,
+                            modifier = Modifier.padding(start = 20.dp)
+                        )
+                        Text(
+                            text = formatTime(timeSpentSeconds),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.padding(end = 20.dp)
                         )
                     }
+
+
                 }
 
                 // 2. Board Area
@@ -300,7 +390,13 @@ fun SudokuGameScreen(
                                 if (!currentCell.isFixed) {
                                     if (isNoteMode) {
                                         if (currentCell.value == 0) {
-                                            updateSudoku(sudoku.toggleCandidate(row, col, selectedNumber!!))
+                                            updateSudoku(
+                                                sudoku.toggleCandidate(
+                                                    row,
+                                                    col,
+                                                    selectedNumber!!
+                                                )
+                                            )
                                         }
                                     } else {
                                         val newValue = selectedNumber!!
@@ -316,9 +412,13 @@ fun SudokuGameScreen(
                         },
                         selectedRow = selectedRow,
                         selectedCol = selectedCol,
-                        highlightNumber = selectedNumber ?: if (selectedRow != null && selectedCol != null) {
-                            sudoku.getCell(selectedRow!!, selectedCol!!).value.takeIf { it != 0 }
-                        } else null,
+                        highlightNumber = selectedNumber
+                            ?: if (selectedRow != null && selectedCol != null) {
+                                sudoku.getCell(
+                                    selectedRow!!,
+                                    selectedCol!!
+                                ).value.takeIf { it != 0 }
+                            } else null,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -358,7 +458,13 @@ fun SudokuGameScreen(
                                     if (!currentCell.isFixed) {
                                         if (isNoteMode) {
                                             if (currentCell.value == 0) {
-                                                updateSudoku(sudoku.toggleCandidate(row, col, number))
+                                                updateSudoku(
+                                                    sudoku.toggleCandidate(
+                                                        row,
+                                                        col,
+                                                        number
+                                                    )
+                                                )
                                             }
                                         } else {
                                             if (currentCell.value != number) {
@@ -384,14 +490,20 @@ fun SudokuGameScreen(
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                Box(
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.Center
+                                ) {
                                     ToolbarActionButton(
                                         onClick = { undo() },
                                         icon = Icons.AutoMirrored.Filled.Undo,
                                         contentDescription = "Undo"
                                     )
                                 }
-                                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                Box(
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.Center
+                                ) {
                                     ToolbarActionButton(
                                         onClick = {
                                             if (selectedRow != null && selectedCol != null) {
@@ -411,7 +523,10 @@ fun SudokuGameScreen(
                                     )
                                 }
                                 // Edit Button
-                                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                Box(
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.Center
+                                ) {
                                     ToolbarActionButton(
                                         onClick = { isNoteMode = !isNoteMode },
                                         icon = Icons.Default.Edit,
@@ -419,7 +534,10 @@ fun SudokuGameScreen(
                                         isSelected = isNoteMode
                                     )
                                 }
-                                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                Box(
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.Center
+                                ) {
                                     ToolbarActionButton(
                                         onClick = {
                                             updateSudoku(
@@ -432,7 +550,10 @@ fun SudokuGameScreen(
                                         contentDescription = "Auto Candidates"
                                     )
                                 }
-                                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                Box(
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.Center
+                                ) {
                                     ToolbarActionButton(
                                         onClick = {
                                             scope.launch {
@@ -469,8 +590,10 @@ private fun ToolbarActionButton(
         label = "scale"
     )
 
-    val containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
-    val contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+    val containerColor =
+        if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+    val contentColor =
+        if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
 
     Box(
         modifier = modifier
@@ -500,4 +623,12 @@ private fun ToolbarActionButton(
             )
         }
     }
+}
+
+@SuppressLint("DefaultLocale")
+fun formatTime(seconds: Long): String {
+    val hours = seconds / 3600
+    val minutes = (seconds % 3600) / 60
+    val secs = seconds % 60
+    return String.format("%02d:%02d:%02d", hours, minutes, secs)
 }

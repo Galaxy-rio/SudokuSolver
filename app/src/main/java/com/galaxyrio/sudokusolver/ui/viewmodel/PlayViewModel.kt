@@ -25,7 +25,10 @@ class PlayViewModel(application: Application) : AndroidViewModel(application) {
                     id = entity.id.toString(),
                     date = formatLastPlayed(entity.lastPlayed),
                     difficulty = entity.difficulty,
-                    completionPercentage = calculateCompletion(entity)
+                    completionPercentage = calculateCompletion(entity),
+                    emptyRemains = 81 - entity.sudoku.cells.count { it.value != 0 },
+                    timeSpentSeconds = entity.timeSpent,
+                    board = entity.sudoku.cells.map { it.value }
                 )
             }
         }

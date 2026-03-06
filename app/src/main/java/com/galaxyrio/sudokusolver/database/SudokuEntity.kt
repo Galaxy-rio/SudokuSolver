@@ -11,6 +11,7 @@ data class SudokuEntity(
     val id: Long = 0,
     val difficulty: Difficulty,
     val sudoku: Sudoku,
+    val timeSpent: Long = 0, // Time spent in seconds
     val lastPlayed: Long = System.currentTimeMillis()
 )
 
