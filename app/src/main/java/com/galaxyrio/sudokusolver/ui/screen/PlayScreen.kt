@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -339,7 +340,8 @@ fun PlayMenuScreen(
                             } else {
                                 ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
                             },
-                        modifier = Modifier.sharedBounds(
+                        modifier = Modifier
+                            .sharedBounds(
                             rememberSharedContentState(key = itemKeyContainer),
                             animatedVisibilityScope = animatedVisibilityScope,
                         ),
