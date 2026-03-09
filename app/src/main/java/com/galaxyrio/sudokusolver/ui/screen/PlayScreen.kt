@@ -4,8 +4,11 @@ import android.annotation.SuppressLint
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.SharedTransitionScope.ResizeMode.Companion.RemeasureToBounds
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -176,6 +179,7 @@ fun PlayMenuScreen(
                             modifier = Modifier.sharedBounds(
                                 rememberSharedContentState(key = "game_container"),
                                 animatedVisibilityScope = animatedVisibilityScope,
+                                resizeMode = RemeasureToBounds,
                             ),
                             onClick = { onStartGame(difficulty) },
                             icon = { Icon(Icons.Filled.Add, "Start New Game") },
@@ -301,6 +305,7 @@ fun PlayMenuScreen(
                                     modifier = Modifier.size(64.dp)
                                             .sharedBounds(
                                             rememberSharedContentState(key = itemKeyThumbnail),
+                                                resizeMode = RemeasureToBounds,
                                     animatedVisibilityScope = animatedVisibilityScope,)
 
                                 )
@@ -344,6 +349,7 @@ fun PlayMenuScreen(
                             .sharedBounds(
                             rememberSharedContentState(key = itemKeyContainer),
                             animatedVisibilityScope = animatedVisibilityScope,
+                                resizeMode = RemeasureToBounds,
                         ),
 
                     )
