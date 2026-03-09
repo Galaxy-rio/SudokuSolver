@@ -252,7 +252,8 @@ fun PlayMenuScreen(
                 items(filteredSavedGames.size) { index ->
                     val game = filteredSavedGames[index]
                     val isSelected = game.id in selectedGameIds
-                    val itemKey = "game_container_${game.id}"
+                    val itemKeyContainer = "game_container_${game.id}"
+                    val itemKeyThumbnail = "thumbnail_${game.id}"
 
                     SegmentedListItem(
                         onClick = {
@@ -297,6 +298,10 @@ fun PlayMenuScreen(
                                     board = game.board,
                                     cornerRadius = cornerRadius,
                                     modifier = Modifier.size(64.dp)
+                                            .sharedBounds(
+                                            rememberSharedContentState(key = itemKeyThumbnail),
+                                    animatedVisibilityScope = animatedVisibilityScope,)
+
                                 )
 
                         },
@@ -335,7 +340,7 @@ fun PlayMenuScreen(
                                 ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
                             },
                         modifier = Modifier.sharedBounds(
-                            rememberSharedContentState(key = itemKey),
+                            rememberSharedContentState(key = itemKeyContainer),
                             animatedVisibilityScope = animatedVisibilityScope,
                         ),
 

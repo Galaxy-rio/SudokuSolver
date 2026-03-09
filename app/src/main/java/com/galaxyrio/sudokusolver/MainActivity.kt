@@ -14,6 +14,7 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -37,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
@@ -98,10 +100,10 @@ fun SudokuSolverApp() {
 
                 exitTransition = {
                     slideOutHorizontally(
-                        animationSpec = motionScheme.fastSpatialSpec(),
+                        animationSpec = motionScheme.defaultSpatialSpec(),
                         targetOffsetX = { -it / 3 }
                     ) + fadeOut(
-                        animationSpec = motionScheme.fastEffectsSpec(),
+                        animationSpec = motionScheme.defaultEffectsSpec(),
                         targetAlpha = 1f
                     )
                 },
@@ -118,13 +120,14 @@ fun SudokuSolverApp() {
 
                 popExitTransition = {
                     slideOutHorizontally(
-                        animationSpec = motionScheme.fastSpatialSpec(),
+                        animationSpec = motionScheme.defaultSpatialSpec(),
                         targetOffsetX = { it }
                     ) + fadeOut(
-                        animationSpec = motionScheme.fastEffectsSpec(),
-                        targetAlpha = 1f
+                        animationSpec = motionScheme.defaultEffectsSpec(),
+                        targetAlpha = 0f
                     )
                 },
+
                 sizeTransform = {
                     SizeTransform(
                         clip = false,

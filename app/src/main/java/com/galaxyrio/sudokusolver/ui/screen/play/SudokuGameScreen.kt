@@ -430,6 +430,21 @@ fun SudokuGameScreen(
                     )
 
             }
+
+            val boardModifier = if (gameId != null) {
+                Modifier.sharedElement(
+                    rememberSharedContentState(key = "thumbnail_$gameId"),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                )
+                    .fillMaxSize()
+            } else {
+                Modifier.sharedElement(
+                    rememberSharedContentState(key = "thumbnail"),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                )
+                    .fillMaxSize()
+            }
+
             BoxWithConstraints(
                 modifier = backgroundModifier,
                 contentAlignment = Alignment.TopCenter
@@ -495,7 +510,7 @@ fun SudokuGameScreen(
                                     selectedCol!!
                                 ).value.takeIf { it != 0 }
                             } else null,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = boardModifier,
 
                     )
                 }
