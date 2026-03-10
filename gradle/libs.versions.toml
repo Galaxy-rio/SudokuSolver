@@ -13,6 +13,7 @@ composeBom = "2026.02.01"
 room = "2.8.4"
 navigationCompose = "2.9.7"
 material3 = "1.5.0-alpha15"
+materialKolor = "4.1.1"
 
 [libraries]
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
@@ -36,6 +37,8 @@ androidx-compose-material3-adaptive-navigation-suite = { group = "androidx.compo
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+materialKolor = { module = "com.materialkolor:material-kolor", version.ref = "materialKolor" }
+
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
