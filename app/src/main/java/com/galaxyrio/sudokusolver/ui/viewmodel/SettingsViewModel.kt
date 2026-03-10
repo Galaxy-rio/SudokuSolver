@@ -32,6 +32,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             PaletteStyleOption.Rainbow -> PaletteStyle.Rainbow
             PaletteStyleOption.FruitSalad -> PaletteStyle.FruitSalad
             PaletteStyleOption.Monochrome -> PaletteStyle.Monochrome
+            PaletteStyleOption.Fidelity -> PaletteStyle.Fidelity
+            PaletteStyleOption.Content -> PaletteStyle.Content
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PaletteStyle.TonalSpot)
 
@@ -58,6 +60,8 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             PaletteStyle.Rainbow -> PaletteStyleOption.Rainbow
             PaletteStyle.FruitSalad -> PaletteStyleOption.FruitSalad
             PaletteStyle.Monochrome -> PaletteStyleOption.Monochrome
+            PaletteStyle.Fidelity -> PaletteStyleOption.Fidelity
+            PaletteStyle.Content -> PaletteStyleOption.Content
             else -> PaletteStyleOption.TonalSpot
         }
         repository.setPaletteStyle(option)

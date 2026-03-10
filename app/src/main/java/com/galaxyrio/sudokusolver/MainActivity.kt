@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.LIGHT -> false
             }
 
+            val navController = rememberNavController()
             SudokuSolverTheme(
                 darkTheme = darkTheme,
                 dynamicColor = useDynamicColors,
@@ -95,19 +96,19 @@ class MainActivity : ComponentActivity() {
                 colorSeed = themeColor,
                 paletteStyle = paletteStyle
             ) {
-                SudokuSolverApp(settingsViewModel)
+                SudokuSolverApp(navController, settingsViewModel)
             }
         }
     }
 }
 
-@PreviewScreenSizes
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun SudokuSolverApp(
+    navController: androidx.navigation.NavHostController,
     settingsViewModel: SettingsViewModel = viewModel()
 ) {
-    val navController = rememberNavController()
     val motionScheme = MaterialTheme.motionScheme
     Surface(
         modifier = Modifier.fillMaxSize(),

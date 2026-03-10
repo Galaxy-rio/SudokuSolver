@@ -60,7 +60,7 @@ fun SettingsScreen(
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         topBar = {
             LargeFlexibleTopAppBar(
-                title = { Text("Settings", modifier = Modifier.padding(start=4.dp)) },
+                title = { Text("Settings", modifier= Modifier.padding(start = 4.dp)) },
                 colors = topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainer,
                     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer),
@@ -73,7 +73,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(all = 16.dp)
+                .padding(horizontal = 16.dp)
         ) {
 
             items(SettingsCategory.entries) { category ->

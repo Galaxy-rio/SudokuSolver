@@ -11,7 +11,7 @@ enum class ThemeMode {
 }
 
 enum class PaletteStyleOption {
-    TonalSpot, Neutral, Vibrant, Expressive, Rainbow, FruitSalad, Monochrome
+    TonalSpot, Neutral, Vibrant, Expressive, Rainbow, FruitSalad, Monochrome, Fidelity, Content
 }
 
 class SettingsRepository(context: Context) {
