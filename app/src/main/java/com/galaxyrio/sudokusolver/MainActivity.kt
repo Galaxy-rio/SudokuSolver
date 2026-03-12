@@ -58,8 +58,6 @@ import com.galaxyrio.sudokusolver.ui.screen.PlayMenuScreen
 import com.galaxyrio.sudokusolver.ui.screen.play.SudokuGameScreen
 import com.galaxyrio.sudokusolver.ui.screen.SettingsScreen
 import com.galaxyrio.sudokusolver.ui.screen.SettingsCategory
-import com.galaxyrio.sudokusolver.ui.screen.Difficulty
-
 import com.galaxyrio.sudokusolver.ui.screen.settings.AppearanceSettingsScreen
 import com.galaxyrio.sudokusolver.ui.screen.settings.GameSettingsScreen
 import com.galaxyrio.sudokusolver.ui.screen.settings.AssistanceSettingsScreen
@@ -67,6 +65,7 @@ import com.galaxyrio.sudokusolver.ui.screen.settings.FilesSettingsScreen
 import com.galaxyrio.sudokusolver.ui.screen.settings.LanguageSettingsScreen
 import com.galaxyrio.sudokusolver.ui.screen.settings.AboutSettingsScreen
 import com.galaxyrio.sudokusolver.ui.viewmodel.SettingsViewModel
+import libsudoku.wrapping.SudokuGenerator.Difficulty
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

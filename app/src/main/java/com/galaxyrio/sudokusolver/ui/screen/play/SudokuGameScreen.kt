@@ -1,6 +1,7 @@
 package com.galaxyrio.sudokusolver.ui.screen.play
 
 import android.annotation.SuppressLint
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
@@ -62,12 +63,13 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.galaxyrio.sudokusolver.database.AppDatabase
 import com.galaxyrio.sudokusolver.database.SudokuEntity
-import com.galaxyrio.sudokusolver.game.Sudoku
-import com.galaxyrio.sudokusolver.game.generator.SudokuGenerator
-import com.galaxyrio.sudokusolver.game.validator.SudokuValidator
 import com.galaxyrio.sudokusolver.ui.components.NumberPad
 import com.galaxyrio.sudokusolver.ui.components.SudokuBoard
-import com.galaxyrio.sudokusolver.ui.screen.Difficulty
+import com.galaxyrio.sudokusolver.ui.components.SudokuBoardState
+import libsudoku.wrapping.Cell
+import libsudoku.wrapping.Sudoku
+import libsudoku.wrapping.SudokuGenerator
+import libsudoku.wrapping.SudokuGenerator.Difficulty
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
@@ -99,56 +101,54 @@ fun SudokuGameScreen(
 
     // Initialize the board using the generator
     // We use a nullable state to show loading until we check the DB
-    var sudokuState by remember { mutableStateOf<Sudoku?>(null) }
+    var nullableSudokuBoardState by remember { mutableStateOf<SudokuBoardState?>(null) }
 
     LaunchedEffect(key1 = gameId, key2 = difficulty) {
         withContext(Dispatchers.IO) {
-            var loadedGame: Sudoku? = null
+            var loadedBoardState: SudokuBoardState? = null
             if (gameId != null) {
-                val savedGame = dao.getGame(gameId)
+                val savedGame: SudokuEntity? =
+                    try {
+                        dao.getGame(gameId)
+                    } catch (e: Exception) {
+                        Log.e("SudokuGameScreen", "Failed to load game: $gameId wit reason: ${e.message}")
+                        null
+                    }
                 if (savedGame != null) {
-                    loadedGame = savedGame.sudoku
+                    loadedBoardState = savedGame.sudokuBoardState
                     timeSpentSeconds = savedGame.timeSpent
                 }
             }
 
-            if (loadedGame != null) {
-                sudokuState = loadedGame
+            if (loadedBoardState != null) {
+                nullableSudokuBoardState = loadedBoardState
             } else {
                 // New Game
-                val clues = when (difficulty) {
-                    Difficulty.EASY -> 40
-                    Difficulty.MEDIUM -> 30
-                    Difficulty.HARD -> 24
-                }
-                val newGame = SudokuGenerator().generate(clues)
-                sudokuState = newGame
-                timeSpentSeconds = 0
+                val newBoardState = SudokuBoardState(SudokuGenerator().generate(difficulty))
                 // Save immediately to get an ID
                 val newId = dao.saveGame(
                     SudokuEntity(
                         difficulty = difficulty,
-                        sudoku = newGame,
+                        sudokuBoardState = newBoardState,
                         timeSpent = 0
                     )
                 )
                 currentGameId = newId
+                nullableSudokuBoardState = newBoardState
+                timeSpentSeconds = 0
             }
         }
     }
 
-    if (sudokuState == null) {
+    if (nullableSudokuBoardState == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
         }
         return
     }
 
-    var sudoku by remember(sudokuState) { mutableStateOf(sudokuState!!) }
+    var sudokuBoardState by remember(nullableSudokuBoardState) { mutableStateOf(nullableSudokuBoardState!!) }
 
-    var selectedRow by remember { mutableStateOf<Int?>(null) }
-    var selectedCol by remember { mutableStateOf<Int?>(null) }
-    var selectedNumber by remember { mutableStateOf<Int?>(null) }
     var isNoteMode by remember { mutableStateOf(false) }
     var showWinDialog by remember { mutableStateOf(false) }
 
@@ -173,17 +173,12 @@ fun SudokuGameScreen(
                 isTimerRunning = false
                 // Save on pause
                 scope.launch(Dispatchers.IO) {
-                    currentGameId?.let { id ->
-                        val currentSudoku = sudokuState ?: return@launch
-                        dao.saveGame(
-                            SudokuEntity(
-                                id = id,
-                                difficulty = difficulty,
-                                sudoku = currentSudoku,
-                                timeSpent = timeSpentSeconds
-                            )
-                        )
-                    }
+                    dao.saveGame(SudokuEntity(
+                        id = currentGameId!!,
+                        difficulty = difficulty,
+                        sudokuBoardState = sudokuBoardState,
+                        timeSpent = timeSpentSeconds,
+                    ))
                 }
             } else if (event == Lifecycle.Event.ON_RESUME) {
                 isTimerRunning = true
@@ -193,17 +188,14 @@ fun SudokuGameScreen(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             // Save on exit
-            scope.launch(Dispatchers.IO + NonCancellable) {
-                currentGameId?.let { id ->
-                    val currentSudoku = sudokuState ?: return@launch
-                    dao.saveGame(
-                        SudokuEntity(
-                            id = id,
-                            difficulty = difficulty,
-                            sudoku = currentSudoku,
-                            timeSpent = timeSpentSeconds
-                        )
-                    )
+            scope.launch(Dispatchers.IO) {
+                withContext(NonCancellable) {
+                    dao.saveGame(SudokuEntity(
+                        id = currentGameId!!,
+                        difficulty = difficulty,
+                        sudokuBoardState = sudokuBoardState,
+                        timeSpent = timeSpentSeconds,
+                    ))
                 }
             }
         }
@@ -217,28 +209,21 @@ fun SudokuGameScreen(
     // ScaffoldState moved up for BackHandler access
 
     fun updateSudoku(newSudoku: Sudoku) {
-        history.add(sudoku)
-        sudoku = newSudoku
-        // Update local state copy if needed for saving
-        sudokuState = newSudoku
+        history.add(sudokuBoardState.sudoku)
+        sudokuBoardState = sudokuBoardState.updateSudoku(newSudoku)
 
         // Save to DB asynchronously
         scope.launch(Dispatchers.IO) {
-            currentGameId?.let { id ->
-                dao.saveGame(
-                    SudokuEntity(
-                        id = id,
-                        difficulty = difficulty,
-                        sudoku = newSudoku,
-                        timeSpent = timeSpentSeconds
-                    )
-                )
-            }
+            dao.saveGame(SudokuEntity(
+                id = currentGameId!!,
+                difficulty = difficulty,
+                sudokuBoardState = sudokuBoardState,
+                timeSpent = timeSpentSeconds,
+            ))
         }
 
         // Check win condition
-        val isFull = newSudoku.cells.none { it.value == 0 }
-        if (isFull && SudokuValidator.isBoardValid(newSudoku)) {
+        if (newSudoku.isBoardComplete && newSudoku.isConsistent) {
             showWinDialog = true
             // Clear saved game on win
             scope.launch(Dispatchers.IO) {
@@ -251,7 +236,7 @@ fun SudokuGameScreen(
 
     fun undo() {
         if (history.isNotEmpty()) {
-            sudoku = history.removeAt(history.lastIndex)
+            sudokuBoardState.updateSudoku(history.removeAt(history.lastIndex))
         }
     }
 
@@ -259,8 +244,6 @@ fun SudokuGameScreen(
     val interactionSource = remember { MutableInteractionSource() }
 
     with(sharedTransitionScope) {
-
-
         Scaffold(
             modifier = Modifier,
             topBar = {
@@ -317,6 +300,7 @@ fun SudokuGameScreen(
                             horizontalArrangement = Arrangement.SpaceEvenly,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            // Undo Button
                             Box(
                                 modifier = Modifier.weight(1f),
                                 contentAlignment = Alignment.Center
@@ -324,32 +308,25 @@ fun SudokuGameScreen(
                                 ToolbarActionButton(
                                     onClick = { undo() },
                                     icon = Icons.AutoMirrored.Filled.Undo,
-                                    contentDescription = "Undo"
-                            )
+                                    contentDescription = "Undo",
+                                )
                             }
+                            // Delete Button
                             Box(
                                 modifier = Modifier.weight(1f),
                                 contentAlignment = Alignment.Center
                             ) {
                                 ToolbarActionButton(
                                     onClick = {
-                                        if (selectedRow != null && selectedCol != null) {
-                                            val row = selectedRow!!
-                                            val col = selectedCol!!
-                                            val currentCell = sudoku.getCell(row, col)
-
-                                            if (!currentCell.isFixed) {
-                                                if (currentCell.value != 0 || currentCell.candidates.isNotEmpty()) {
-                                                    updateSudoku(sudoku.setCell(row, col, 0))
-                                                }
-                                            }
+                                        if (sudokuBoardState.selectedRow != null && sudokuBoardState.selectedCol != null) {
+                                            updateSudoku(sudokuBoardState.sudoku.setCell(sudokuBoardState.selectedRow!!, sudokuBoardState.selectedCol!!, Cell.Notes()))
                                         }
                                     },
                                     icon = Icons.AutoMirrored.Filled.Backspace,
                                     contentDescription = "Delete"
-                            )
+                                )
                             }
-                            // Edit Button
+                            // Node Mode Button
                             Box(
                                 modifier = Modifier.weight(1f),
                                 contentAlignment = Alignment.Center
@@ -361,22 +338,20 @@ fun SudokuGameScreen(
                                     isSelected = isNoteMode
                                 )
                             }
+                            // Auto Candidates Button
                             Box(
                                 modifier = Modifier.weight(1f),
                                 contentAlignment = Alignment.Center
                             ) {
                                 ToolbarActionButton(
                                     onClick = {
-                                        updateSudoku(
-                                            com.galaxyrio.sudokusolver.game.generator.CandidateCalculator.calculateAllCandidates(
-                                                sudoku
-                                            )
-                                        )
+                                        updateSudoku(Sudoku(sudokuBoardState.sudoku.rebuildNotes()))
                                     },
                                     icon = Icons.Default.AutoAwesome,
                                     contentDescription = "Auto Candidates"
-                            )
+                                )
                             }
+                            // Hint Button
                             Box(
                                 modifier = Modifier.weight(1f),
                                 contentAlignment = Alignment.Center
@@ -387,7 +362,7 @@ fun SudokuGameScreen(
                                     },
                                     icon = Icons.Default.Lightbulb,
                                     contentDescription = "Hint"
-                            )
+                                )
                             }
                         }
                     }
@@ -465,147 +440,101 @@ fun SudokuGameScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         SudokuBoard(
-                            sudoku = sudoku,
+                            sudokuBoardState = sudokuBoardState,
                             onCellClick = { row, col ->
-                                if (selectedRow == row && selectedCol == col) {
-                                    selectedRow = null
-                                    selectedCol = null
-                            } else {
-                                selectedRow = row
-                                selectedCol = col
-                            }
-
-                            // If a number is selected in the pad, try to fill it
-                            val currentCell = sudoku.getCell(row, col)
-                            if (selectedNumber != null) {
-                                if (!currentCell.isFixed) {
+                                sudokuBoardState.toggleSelectPosition(row, col)
+                                if (sudokuBoardState.selectedNumber != null) {
                                     if (isNoteMode) {
-                                        if (currentCell.value == 0) {
-                                            updateSudoku(
-                                                sudoku.toggleCandidate(
-                                                    row,
-                                                    col,
-                                                    selectedNumber!!
-                                                )
-                                            )
-                                        }
+                                        updateSudoku(sudokuBoardState.sudoku.toggleNote(row, col, sudokuBoardState.selectedNumber!!))
                                     } else {
-                                        val newValue = selectedNumber!!
-                                        // Only update if value is changing
-                                        if (currentCell.value != newValue) {
-                                            updateSudoku(sudoku.setCell(row, col, newValue))
+                                        val newValue = sudokuBoardState.selectedNumber!!
+                                        if (sudokuBoardState.sudoku.board()[row][col].number() != newValue) {
+                                            updateSudoku(sudokuBoardState.sudoku.fillNumber(row, col, newValue))
                                         }
                                     }
-                                } else {
-                                    selectedNumber = null
                                 }
-                            }
-                        },
-                        selectedRow = selectedRow,
-                        selectedCol = selectedCol,
-                        highlightNumber = selectedNumber
-                            ?: if (selectedRow != null && selectedCol != null) {
-                                sudoku.getCell(
-                                    selectedRow!!,
-                                    selectedCol!!
-                                ).value.takeIf { it != 0 }
-                            } else null,
-                        modifier = boardModifier,
+                            },
+                            modifier = boardModifier,
+                        )
+                    }
 
-                    )
-                }
-
-                // Remaining space for Number Pad
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .clickable(
-                            interactionSource = interactionSource,
-                            indication = null
-                        ) {
-                            // Deselect cell when clicking empty space
-                            selectedRow = null
-                            selectedCol = null
-                        },
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // Middle Area: Number Pad
-                    Box(
+                    // Remaining space for Number Pad
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f), // Take available space
-                        contentAlignment = Alignment.Center
+                            .weight(1f)
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = null
+                            ) {
+                                // Deselect cell when clicking empty space
+                                sudokuBoardState.unselectNumber()
+                            },
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        NumberPad(
-                            selectedNumber = selectedNumber,
-                            onNumberClick = { number ->
-                                // Logic update: If a cell is selected (Cell First Mode), fill it and Clear selection
-                                if (selectedRow != null && selectedCol != null) {
-                                    val row = selectedRow!!
-                                    val col = selectedCol!!
-                                    val currentCell = sudoku.getCell(row, col)
-
-                                    if (!currentCell.isFixed) {
-                                        if (isNoteMode) {
-                                            if (currentCell.value == 0) {
-                                                updateSudoku(
-                                                    sudoku.toggleCandidate(
-                                                        row,
-                                                        col,
-                                                        number
-                                                    )
-                                                )
-                                            }
-                                        } else {
-                                            if (currentCell.value != number) {
-                                                updateSudoku(sudoku.setCell(row, col, number))
+                        // Middle Area: Number Pad
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f), // Take available space
+                            contentAlignment = Alignment.Center
+                        ) {
+                            NumberPad(
+                                selectedNumber = sudokuBoardState.selectedNumber,
+                                onNumberClick = { number ->
+                                    sudokuBoardState.toggleSelectNumber(number)
+                                    // Logic update: If a cell is selected (Cell First Mode), fill it and Clear selection
+                                    if (sudokuBoardState.selectedRow != null && sudokuBoardState.selectedCol != null) {
+                                        val row = sudokuBoardState.selectedRow!!
+                                        val col = sudokuBoardState.selectedCol!!
+                                        val cell = sudokuBoardState.sudoku.board()[row][col]
+                                        if (cell.number() == null) {
+                                            if (isNoteMode) {
+                                                updateSudoku(sudokuBoardState.sudoku.toggleNote(row, col, number))
+                                            } else {
+                                                if (cell.number() != number) {
+                                                    updateSudoku(sudokuBoardState.sudoku.fillNumber(row, col, number))
+                                                }
                                             }
                                         }
                                     }
-                                    // Cell First detected: clear the number selection so user isn't stuck in "fill mode" for this number
-                                    selectedNumber = null
-                                } else {
-                                    // Digit First Mode: Toggle number selection
-                                    selectedNumber = if (selectedNumber == number) null else number
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
                 }
             }
         }
-    }
 
-    if (showBottomSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showBottomSheet = false },
-            sheetState = sheetState
-        ) {
-            com.galaxyrio.sudokusolver.ui.components.GameHintPanel(
-                onBackClick = {
-                    scope.launch { sheetState.hide() }.invokeOnCompletion {
-                        if (!sheetState.isVisible) {
-                            showBottomSheet = false
+        if (showBottomSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showBottomSheet = false },
+                sheetState = sheetState
+            ) {
+                com.galaxyrio.sudokusolver.ui.components.GameHintPanel(
+                    onBackClick = {
+                        scope.launch { sheetState.hide() }.invokeOnCompletion {
+                            if (!sheetState.isVisible) {
+                                showBottomSheet = false
+                            }
                         }
-                    }
-                },
-                onApplyClick = {
-                    /* Apply Hint */
-                    scope.launch { sheetState.hide() }.invokeOnCompletion {
-                        if (!sheetState.isVisible) {
-                            showBottomSheet = false
+                    },
+                    onApplyClick = {
+                        /* Apply Hint */
+                        scope.launch { sheetState.hide() }.invokeOnCompletion {
+                            if (!sheetState.isVisible) {
+                                showBottomSheet = false
+                            }
                         }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(360.dp)
-            )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(360.dp)
+                )
+            }
         }
     }
-}
 }
 
 @Composable

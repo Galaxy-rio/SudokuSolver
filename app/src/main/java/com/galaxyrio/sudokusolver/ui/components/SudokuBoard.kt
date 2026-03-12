@@ -23,18 +23,134 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.clip
-import com.galaxyrio.sudokusolver.game.Sudoku
-import com.galaxyrio.sudokusolver.game.Cell
+import com.galaxyrio.sudokusolver.game.serializer.SudokuSerializer
 import com.galaxyrio.sudokusolver.game.validator.SudokuValidator
+import libsudoku.wrapping.Cell
+import libsudoku.wrapping.Sudoku
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
+
+@Serializable
+data class SudokuBoardState(
+    @Serializable(with = SudokuSerializer::class)
+    val sudoku: Sudoku,
+    val cells: List<SudokuCellState>,
+    @Transient val selectedRow: Int? = null,
+    @Transient val selectedCol: Int? = null,
+    @Transient val selectedNumber: Int? = null,
+) {
+    constructor(sudoku: Sudoku): this(
+        sudoku = sudoku,
+        cells = List(81) {
+            val row = it / 9
+            val col = it % 9
+            val cell = sudoku.board()[row][col]
+            SudokuCellState(
+                isProvided = cell.isFixed,
+                value = cell.number(),
+                candidates = if (cell.isFixed) emptySet() else cell.candidates(),
+            )
+        }
+    )
+
+    fun selectPosition(selectedRow: Int, selectedCol: Int) = this.copy(
+        cells = List(81) {
+            val row = it / 9
+            val col = it % 9
+            val oldState = this.cells[it]
+            oldState.copy(
+                isSelected = (row == selectedRow && col == selectedCol),
+                isSelectedCross = (row == selectedRow || col == selectedCol),
+                isSelectedBox = (row / 3 == selectedRow / 3 && col / 3 == selectedCol / 3),
+            )
+        },
+        selectedRow = selectedRow,
+        selectedCol = selectedCol,
+    )
+
+    fun unselectPosition() = this.copy(
+        cells = List(81) {
+            val row = it / 9
+            val col = it % 9
+            val oldState = this.cells[it]
+            oldState.copy(
+                isSelected = false,
+                isSelectedCross = false,
+                isSelectedBox = false,
+            )
+        },
+        selectedRow = null,
+        selectedCol = null,
+    )
+
+    fun toggleSelectPosition(selectedRow: Int, selectedCol: Int) =
+        if (selectedRow == this.selectedRow && selectedCol == this.selectedCol) unselectPosition()
+        else selectPosition(selectedRow, selectedCol)
+
+    fun selectNumber(selectedNumber: Int) = this.copy(
+        cells = List(81) {
+            val row = it / 9
+            val col = it % 9
+            val oldState = this.cells[it]
+            oldState.copy(
+                highlightNumber = selectedNumber,
+            )
+        },
+        selectedNumber = selectedNumber,
+    )
+
+    fun unselectNumber() = this.copy(
+        cells = List(81) {
+            val row = it / 9
+            val col = it % 9
+            val oldState = this.cells[it]
+            oldState.copy(
+                highlightNumber = null,
+            )
+        },
+        selectedNumber = null,
+    )
+
+    fun toggleSelectNumber(selectedNumber: Int) =
+        if (selectedNumber == this.selectedNumber) unselectNumber()
+        else selectNumber(selectedNumber)
+
+    fun updateSudoku(sudoku: Sudoku) = this.copy(
+        sudoku = sudoku,
+        cells = List(81) {
+            val row = it / 9
+            val col = it % 9
+            val oldState = this.cells[it]
+            val cell = sudoku.board()[row][col]
+            oldState.copy(
+                value = cell.number(),
+                candidates = if (cell.isFixed) emptySet() else cell.candidates(),
+                isError = SudokuValidator.checkContradiction(sudoku, row, col),
+                errorCandidates = if (cell.isFixed) emptySet() else
+                    cell.candidates().filter { SudokuValidator.checkContradiction(sudoku, row, col, it) }.toSet()
+            )
+        }
+    )
+}
+
+@Serializable
+data class SudokuCellState(
+    val isProvided: Boolean,
+    val value: Int?,
+    val candidates: Set<Int>,
+    val isError: Boolean = false,
+    val errorCandidates: Set<Int> = emptySet(),
+    @Transient val highlightNumber: Int? = null,
+    @Transient val isSelected: Boolean = false,
+    @Transient val isSelectedCross: Boolean = false,
+    @Transient val isSelectedBox: Boolean = false,
+)
 
 @Composable
 fun SudokuBoard(
-    sudoku: Sudoku,
+    sudokuBoardState: SudokuBoardState,
     onCellClick: (row: Int, col: Int) -> Unit,
     modifier: Modifier = Modifier,
-    selectedRow: Int? = null,
-    selectedCol: Int? = null,
-    highlightNumber: Int? = null
 ) {
     val thickLine = 2.dp
     val thinLine = 1.dp
@@ -75,36 +191,8 @@ fun SudokuBoard(
                                     repeat(3) { cellColInBlock ->
                                         val row = blockRow * 3 + cellRowInBlock
                                         val col = blockCol * 3 + cellColInBlock
-                                        val cell = sudoku.getCell(row, col)
-
-                                        val isError = !cell.isFixed && cell.value != 0 && SudokuValidator.checkContradiction(sudoku, row, col)
-                                        val isSelected = (row == selectedRow && col == selectedCol)
-                                        val isSelectedCross = (selectedRow != null && selectedCol != null) && (row == selectedRow || col == selectedCol)
-                                        val isSelectedCell = (selectedRow != null && selectedCol != null) && ((row / 3 == selectedRow.div(3) && col / 3 == selectedCol.div(
-                                            3
-                                        )))
-
-                                        val isValueHighlighted = (highlightNumber != null && cell.value == highlightNumber)
-
-                                        val errorCandidates = if (cell.value == 0) {
-                                            cell.candidates.filter { candidate ->
-                                                SudokuValidator.checkContradiction(sudoku, row, col, candidate)
-                                            }.toSet()
-                                        } else {
-                                            emptySet()
-                                        }
-
                                         SudokuCell(
-                                            value = if (cell.value == 0) null else cell.value,
-                                            candidates = if (cell.value == 0) cell.candidates else emptySet(),
-                                            errorCandidates = errorCandidates,
-                                            isFixed = cell.isFixed,
-                                            isSelected = isSelected,
-                                            isError = isError,
-                                            highlightNumber = highlightNumber,
-                                            isValueHighlighted = isValueHighlighted,
-                                            isSelectedCross = isSelectedCross,
-                                            isSelectedCell = isSelectedCell,
+                                            sudokuBoardState.cells[row * 9 + col],
                                             onClick = { onCellClick(row, col) },
                                             modifier = Modifier
                                                 .weight(1f)
@@ -123,28 +211,30 @@ fun SudokuBoard(
 
 @Composable
 fun SudokuCell(
-    value: Int?,
+    sudokuCellState: SudokuCellState,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    candidates: Set<Int> = emptySet(),
-    errorCandidates: Set<Int> = emptySet(),
-    isFixed: Boolean,
-    isSelected: Boolean,
-    isError: Boolean = false,
-    highlightNumber: Int? = null,
-    isValueHighlighted: Boolean = false,
-    isSelectedCross: Boolean = false,
-    isSelectedCell: Boolean = false,
 ) {
+    val (isProvided, value, candidates, isError, errorCandidates, highlightNumber, isSelected, isSelectedCross, isSelectedBox) = sudokuCellState
+    val isFixedNumberHighlighted = highlightNumber != null && value != null && highlightNumber == value
     val backgroundColor = when {
         isError && isSelected -> MaterialTheme.colorScheme.error
         isError -> MaterialTheme.colorScheme.errorContainer
-        isSelected && isFixed -> MaterialTheme.colorScheme.primary
+        isSelected && isProvided -> MaterialTheme.colorScheme.primary
         isSelected -> MaterialTheme.colorScheme.primaryContainer
         isSelectedCross && !isError -> MaterialTheme.colorScheme.surfaceContainerHighest
-        isSelectedCell && !isError -> MaterialTheme.colorScheme.surfaceContainer
-        isValueHighlighted && !isError -> MaterialTheme.colorScheme.secondaryContainer
+        isSelectedBox && !isError -> MaterialTheme.colorScheme.surfaceContainer
+        isFixedNumberHighlighted && !isError -> MaterialTheme.colorScheme.secondaryContainer
         else -> MaterialTheme.colorScheme.surface
+    }
+    val textColor = when {
+        isError && isSelected -> MaterialTheme.colorScheme.onError
+        isError -> MaterialTheme.colorScheme.onErrorContainer
+        isSelected && isProvided -> MaterialTheme.colorScheme.onPrimary
+        isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
+        isProvided -> MaterialTheme.colorScheme.onSurface
+        isFixedNumberHighlighted -> MaterialTheme.colorScheme.onSecondaryContainer
+        else -> MaterialTheme.colorScheme.primary
     }
 
     Box(
@@ -153,67 +243,58 @@ fun SudokuCell(
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        if (value != null && value != 0) {
-            val textColor = when {
-                isError && isSelected -> MaterialTheme.colorScheme.onError
-                isError -> MaterialTheme.colorScheme.onErrorContainer
-                isSelected && isFixed -> MaterialTheme.colorScheme.onPrimary
-                isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
-                isFixed -> MaterialTheme.colorScheme.onSurface
-                isValueHighlighted -> MaterialTheme.colorScheme.onSecondaryContainer
-                else -> MaterialTheme.colorScheme.primary
-            }
-
+        if (value != null) {
             Text(
                 text = value.toString(),
                 style = MaterialTheme.typography.bodyLarge.copy(
-                    fontWeight = if (isFixed) FontWeight.Bold else FontWeight.Bold, // 改为Normal可以增加对比度
+                    fontWeight = if (isProvided) FontWeight.Bold else FontWeight.Bold, // 改为Normal可以增加对比度
                     fontSize = 30.sp
                 ),
                 color = textColor
             )
         } else if (candidates.isNotEmpty()) {
             Column(
-                modifier = Modifier.fillMaxWidth().aspectRatio(1f).padding(1.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .padding(1.dp),
                 verticalArrangement = Arrangement.SpaceEvenly
             ) {
-                (0..2).forEach { rowOffset ->
+                repeat(3) { rowOffset ->
                     Row(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        (1..3).forEach { colOffset ->
-                            val candidateNum = rowOffset * 3 + colOffset
-                            val isCandidateHighlighted = (highlightNumber != null && candidateNum == highlightNumber && candidates.contains(candidateNum))
+                        repeat(3) { colOffset ->
+                            val candidateNum = rowOffset * 3 + colOffset + 1
+                            val isCandidateHighlighted = candidateNum == highlightNumber
+                            val isErrorCandidate = errorCandidates.contains(candidateNum)
+                            val candidateBackgroundColor = when {
+                                isErrorCandidate -> MaterialTheme.colorScheme.errorContainer
+                                else -> MaterialTheme.colorScheme.secondaryContainer
+                            }
+                            val candidateColor = when {
+                                errorCandidates.contains(candidateNum) -> MaterialTheme.colorScheme.error
+                                isCandidateHighlighted -> MaterialTheme.colorScheme.onSecondaryContainer
+                                isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
+                                else -> MaterialTheme.colorScheme.secondary
+                            }
 
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .aspectRatio(1f)
-                                    .then(
-                                        if (isCandidateHighlighted) {
-                                            val candidateBackground = when{
-                                                errorCandidates.contains(candidateNum) -> MaterialTheme.colorScheme.errorContainer
-                                                else -> MaterialTheme.colorScheme.secondaryContainer
-                                            }
-                                            Modifier.background(
-                                                candidateBackground,
-                                                androidx.compose.foundation.shape.CircleShape
-                                            )
-                                        } else {
-                                            Modifier
-                                        }
-                                    )
-                            ) {
-                                if (candidates.contains(candidateNum)) {
-                                    val candidateColor = when {
-                                        errorCandidates.contains(candidateNum) -> MaterialTheme.colorScheme.error
-                                        isCandidateHighlighted -> MaterialTheme.colorScheme.onSecondaryContainer
-                                        isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
-                                        else -> MaterialTheme.colorScheme.secondary
-                                    }
-
+                            if (candidates.contains(candidateNum)) {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .aspectRatio(1f)
+                                        .then(
+                                            if (isCandidateHighlighted)
+                                                Modifier.background(
+                                                    candidateBackgroundColor,
+                                                    androidx.compose.foundation.shape.CircleShape
+                                                )
+                                            else Modifier
+                                        )
+                                ) {
                                     Text(
                                         text = candidateNum.toString(),
                                         style = MaterialTheme.typography.bodySmall.copy(
@@ -229,6 +310,8 @@ fun SudokuCell(
                     }
                 }
             }
+        } else {
+            assert(false)
         }
     }
 }
@@ -236,16 +319,17 @@ fun SudokuCell(
 @Preview(showBackground = true)
 @Composable
 fun SudokuBoardPreview() {
-    val sampleCells = List(81) { i ->
-        Cell(
-            value = if (i % 5 == 0) (i % 9) + 1 else 0,
-            isFixed = (i % 5 == 0)
-        )
-    }
-    val sampleSudoku = Sudoku(sampleCells)
+    val sampleSudoku = Sudoku(
+        List(9) { r ->
+            List(9) { c ->
+                val i = r * 9 + c
+                if (i % 5 == 0) Cell.Fixed((i % 9) + 1) else Cell.Notes(*(1..9).toSet().toTypedArray())
+            }
+        }
+    )
 
     SudokuBoard(
-        sudoku = sampleSudoku,
+        sudokuBoardState = SudokuBoardState(sampleSudoku),
         onCellClick = { _, _ -> },
         modifier = Modifier.padding(16.dp)
     )

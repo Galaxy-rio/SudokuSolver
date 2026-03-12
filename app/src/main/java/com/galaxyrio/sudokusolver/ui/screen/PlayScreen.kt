@@ -72,11 +72,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.galaxyrio.sudokusolver.ui.viewmodel.PlayViewModel
-
-
-enum class Difficulty {
-    EASY, MEDIUM, HARD
-}
+import libsudoku.wrapping.SudokuGenerator.Difficulty
 
 data class SavedGame(
     val id: String,
