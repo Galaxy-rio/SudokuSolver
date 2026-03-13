@@ -26,9 +26,9 @@ class PlayViewModel(application: Application) : AndroidViewModel(application) {
                     date = formatLastPlayed(entity.lastPlayed),
                     difficulty = entity.difficulty,
                     completionPercentage = calculateCompletion(entity),
-                    emptyRemains = 81 - entity.sudoku.cells.count { it.value != 0 },
+                    emptyRemains = entity.sudokuBoardState.sudoku.board().sumOf { it.count { it.number() == null } },
                     timeSpentSeconds = entity.timeSpent,
-                    board = entity.sudoku.cells.map { it.value }
+                    board = entity.sudokuBoardState.sudoku.fixedPositions().map { it.value }
                 )
             }
         }
@@ -44,8 +44,7 @@ class PlayViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun calculateCompletion(entity: SudokuEntity): Int {
-        val cells = entity.sudoku.cells
-        val solvedCount = cells.count { it.value != 0 }
+        val solvedCount = entity.sudokuBoardState.sudoku.board().sumOf { it.count { it.number() != null } }
         return (solvedCount * 100) / 81
     }
 
